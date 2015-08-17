@@ -2,7 +2,7 @@
 //
 // hic sunt memory leaks, ignoring for now
 //
-// copious inspiration, theft from:
+// inspiration, theft from:
 //   https://dev.opera.com/articles/raw-webgl-part-2-simple-shader/webgl-utils.js
 //   https://developer.mozilla.org/en-US/docs/Web/WebGL
 //   http://learningwebgl.com/
@@ -24,6 +24,48 @@ var nodeVertexTextureCoordBuffer;
 var nodeTexture;
 var nodeRotX;
 var nodeScale;
+
+
+var Camera = function () {
+  // i am the constructor
+};
+
+/**
+ * Node class
+ *
+ * represents a node on the scene graph
+ *
+ *
+ */
+var Node = function(vertices, colors) {
+
+  /* set up vertex positions */
+  this.vertexPositionBuffer = gl.createBuffer();
+  // put vertexPositionBuffer in the array buffer
+  gl.bindBuffer(gl.ARRAY_BUFFER, nodeVertexPositionBuffer);
+  // if (areVerticesOk(vertices)) {
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+  // }
+  this.vertexPositionBuffer.itemSize = 3; // 3 values per vertex
+  this.vertexPositionBuffer.numItems = vertices.length / this.vertexPositionBuffer.itemSize;
+
+  /* set up vertex colors */
+  this.vertexColorBuffer = gl.createBuffer();
+  // put vertexColorBuffer in the array buffer
+  gl.bindBuffer(gl.ARRAY_BUFFER, nodeVertexColorBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+  nodeVertexColorBuffer.numItems = 4;
+  nodeVertexColorBuffer.itemSize = colors.length / this.vertexColorBuffer.itemSize; // 24 before
+
+  // ignoring textures for now
+  this.vertexTextureCoordBuffer = null;
+  this.nodeTexture = null;
+  // transform things
+  this.nodeRotX = 0.0;
+  this.nodeScale = null;
+};
+
+
 
 function initGL(canvas) {
   gl = null;
@@ -96,8 +138,8 @@ function initBuffers() {
     }
   }
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(unpackedColors), gl.STATIC_DRAW);
-  nodeVertexColorBuffer.itemSize = 24;
-  nodeVertexColorBuffer.numItems = 4;
+  nodeVertexColorBuffer.itemSize = 4;
+  nodeVertexColorBuffer.numItems = 24;
 
 
   /** Vertex Element Index Buffer **/
