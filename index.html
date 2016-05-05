@@ -8,14 +8,14 @@
     attribute vec3 aVertexPos;
     attribute vec4 aVertexColor;
     //attribute vec2 aTextureCoord;
-  
+
     uniform mat4 uMVMatrix;
     uniform mat4 uPMatrix;
 
     varying vec4 vColor;
     //varying vec2 vTextureCoord;
-  
-    void main(void) { 
+
+    void main(void) {
       // gl_Position is an implicitly defined varying
       gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPos, 1.0);
       // pass vertex color through
@@ -32,13 +32,14 @@
     //varying vec2 vTextureCoord;
 
     //uniform sampler2D uSampler;
-  
-    void main(void) { 
+
+    void main(void) {
       gl_FragColor = vColor;
       //gl_FragColor = texture2D(uSampler, vec2(vTextureCoord.s, vTextureCoord.t));
     }
   </script>
 
+  <script src="nodeData.js"></script>
   <script src="functions.js"></script>
 
   <title>gl goofing</title>
