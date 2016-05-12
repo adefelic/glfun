@@ -5,16 +5,17 @@
 // inspiration, theft from:
 //   https://dev.opera.com/articles/raw-webgl-part-2-simple-shader/webgl-utils.js
 //   https://developer.mozilla.org/en-US/docs/Web/WebGL
+//   https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Tutorial
 //   http://learningwebgl.com/
 //
 
 // application variables
-var gl;                       // webGL drawing context
-var mvMatrix;                 // model-view matrix
-var mvMatrixStack;            // so we can push and pop
-var pMatrix;                  // projection matrix
-var shaderProgram;            // shader program
-var lastTime = 0;             // last time the animation updated
+var gl;               // webGL drawing context
+var mvMatrix;         // model-view matrix
+var mvMatrixStack;    // so we can push and pop
+var pMatrix;          // projection matrix
+var shaderProgram;    // shader program
+var lastTime = 0;     // last time the animation updated
 
 var Camera = function () {
 	// i am the constructor
@@ -26,48 +27,91 @@ var Camera = function () {
  */
 var Node = function( nodeData ) {
 
+	// declare our instance attributes
+	this.vertexPositionBuffer = null;
+	this.vertexIndexBuffer = null;
+	this.vertexColorBuffer = null;
+	this.vertexNormalBuffer = null;
+	this.rotX = null;
+	this.scale = null;
+
 	//
-	// set up vertex positions
+	// vertex positions
 	//
 	this.vertexPositionBuffer = gl.createBuffer();
 	// put vertexPositionBuffer in the array buffer
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexPositionBuffer);
-	// if (areVerticesOk(vertices)) {
-		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(nodeData.vertices), gl.STATIC_DRAW);
-	// }
-	this.vertexPositionBuffer.itemSize = 3; // 3 values per vertex
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(nodeData.vertices), gl.STATIC_DRAW);
+	this.vertexPositionBuffer.itemSize = 3; // 3 values per vertex, x y z
 	this.vertexPositionBuffer.numItems = nodeData.vertices.length / this.vertexPositionBuffer.itemSize;
 
 	//
-	// set up vertex indices
+	// index vertices
 	//
 	this.vertexIndexBuffer = gl.createBuffer();
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.vertexIndexBuffer);
 	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(nodeData.vertexIndex), gl.STATIC_DRAW);
 	this.vertexIndexBuffer.itemSize = 1; // 1 index per vertex
-	this.vertexIndexBuffer.numItems = nodeData.vertexIndex.length / this.vertexPositionBuffer.itemSize;
+	this.vertexIndexBuffer.numItems = nodeData.vertexIndex.length / this.vertexIndexBuffer.itemSize;
+
+	/*
+		//
+		// vertex colors
+		//
+		this.vertexColorBuffer = gl.createBuffer();
+		// put vertexColorBuffer in the array buffer
+		gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexColorBuffer);
+		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(nodeData.vertexColors), gl.STATIC_DRAW);
+		this.vertexColorBuffer.itemSize = 4; // 4 values per vertex , r g b a
+		this.vertexColorBuffer.numItems = nodeData.vertexColors.length / this.vertexColorBuffer.itemSize;
+	*/
+
+	/*
+		//
+		// vertex normals
+		//
+		this.vertexNormalBuffer = gl.createBuffer();
+		gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexNormalBuffer);
+		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(nodeData.vertexNormals), gl.STATIC_DRAW);
+		this.vertexNormalBuffer.itemSize = 4; // 3 values per vertex , x y z
+		this.vertexNormalBuffer.numItems = nodeData.vertexNormals.length / this.vertexNormalBuffer.itemSize;
+	*/
 
 	//
-	// set up vertex colors
+	// textures
 	//
-	this.vertexColorBuffer = gl.createBuffer();
-	// put vertexColorBuffer in the array buffer
-	gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexColorBuffer);
-	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(nodeData.vertexColors), gl.STATIC_DRAW);
-	this.vertexColorBuffer.itemSize = 4; // 4 values per vertex color
-	this.vertexColorBuffer.numItems = nodeData.vertexColors.length / this.vertexColorBuffer.itemSize;
 
-	// Vertex Texture Coordinate Buffer
+	// make a 1px texture that'll load real fast, then pop in the new one later
+	this.texture = gl.createTexture();
+	gl.bindTexture(gl.TEXTURE_2D, this.texture);
+	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+		new Uint8Array([255, 0, 0, 255])); // red
+
+	// here comes the "real" texture creation + handling
+	this.textureImage = new Image();
+	this.textureImage.src = nodeData.texturePath;
+	//this.textureImage.crossOrigin = 'anonymous'; // hack
+	var self = this;
+	this.textureImage.onload = function() {
+		this.texture = gl.createTexture();
+		console.log('texture loaded');
+		gl.bindTexture(gl.TEXTURE_2D, self.texture);
+		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, self.textureImage);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_NEAREST);
+		gl.generateMipmap(gl.TEXTURE_2D);
+		gl.bindTexture(gl.TEXTURE_2D, null); // cleanup
+	};
+
 	this.vertexTextureCoordBuffer = gl.createBuffer();
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexTextureCoordBuffer);
 	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(nodeData.textureCoords), gl.STATIC_DRAW);
 	this.vertexTextureCoordBuffer.itemSize = 2;
 	this.vertexTextureCoordBuffer.numItems = nodeData.textureCoords.length / this.vertexTextureCoordBuffer.itemSize;
 
-	// ignoring textures for now
-	this.vertexTextureCoordBuffer = null;
-	this.nodeTexture = null;
+	//
 	// transform things
+	//
 	this.rotX = 0.0;
 	this.scale = 1;
 };
@@ -84,118 +128,6 @@ function initGL(canvas) {
 		gl = null;
 	}
 }
-
-/*
-function initBuffers() {
-	nodeRotX = 0.0;
-
-	// Vertex Position Buffer
-	nodeVertexPositionBuffer = gl.createBuffer();
-	// make nodeVertexPositionBuffer the current vertex array buffer
-	gl.bindBuffer(gl.ARRAY_BUFFER, nodeVertexPositionBuffer);
-	// load buffer with vertex position values
-	var vertices = [
-		-1.0, -1.0,  1.0,
-		 1.0, -1.0,  1.0,
-		 1.0,  1.0,  1.0,
-		-1.0,  1.0,  1.0,
-		-1.0, -1.0, -1.0,
-		-1.0,  1.0, -1.0,
-		 1.0,  1.0, -1.0,
-		 1.0, -1.0, -1.0,
-		-1.0,  1.0, -1.0,
-		-1.0,  1.0,  1.0,
-		 1.0,  1.0,  1.0,
-		 1.0,  1.0, -1.0,
-		-1.0, -1.0, -1.0,
-		 1.0, -1.0, -1.0,
-		 1.0, -1.0,  1.0,
-		-1.0, -1.0,  1.0,
-		 1.0, -1.0, -1.0,
-		 1.0,  1.0, -1.0,
-		 1.0,  1.0,  1.0,
-		 1.0, -1.0,  1.0,
-		-1.0, -1.0, -1.0,
-		-1.0, -1.0,  1.0,
-		-1.0,  1.0,  1.0,
-		-1.0,  1.0, -1.0
-	];
-	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-	// some extra data
-	nodeVertexPositionBuffer.itemSize = 3; // 3 values per vertex
-	nodeVertexPositionBuffer.numItems = 24;
-
-	// Vertex Color Buffer
-	nodeVertexColorBuffer = gl.createBuffer();
-	gl.bindBuffer(gl.ARRAY_BUFFER, nodeVertexColorBuffer);
-	var colors = [
-		[1.0, 0.0, 0.0, 1.0],
-		[1.0, 1.0, 0.0, 1.0],
-		[0.0, 1.0, 0.0, 1.0],
-		[1.0, 0.5, 0.5, 1.0],
-		[1.0, 0.0, 1.0, 1.0],
-		[0.0, 0.0, 1.0, 1.0],
-	];
-	var unpackedColors = [];
-	for (var i in colors) {
-		var color = colors[i];
-		for (var j=0; j < 4; j++) {
-			unpackedColors = unpackedColors.concat(color);
-		}
-	}
-	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(unpackedColors), gl.STATIC_DRAW);
-	nodeVertexColorBuffer.itemSize = 4;
-	nodeVertexColorBuffer.numItems = 24;
-
-	// Vertex Element Index Buffer
-	nodeVertexIndexBuffer = gl.createBuffer();
-	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, nodeVertexIndexBuffer);
-	var indices = [
-		 0,  1,  2,    0,  2,  3,
-		 4,  5,  6,    4,  6,  7,
-		 8,  9, 10,    8, 10, 11,
-		12, 13, 14,   12, 14, 15,
-		16, 17, 18,   16, 18, 19,
-		20, 21, 22,   20, 22, 23
-	];
-	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
-	nodeVertexIndexBuffer.itemSize = 1;
-	nodeVertexIndexBuffer.numItems = 36;
-
-	// Vertex Texture Coordinate Buffer
-	nodeVertexTextureCoordBuffer = gl.createBuffer();
-	gl.bindBuffer(gl.ARRAY_BUFFER, nodeVertexTextureCoordBuffer);
-	var textureCoords = [
-		0.0, 0.0,
-		1.0, 0.0,
-		1.0, 1.0,
-		0.0, 1.0,
-		1.0, 0.0,
-		1.0, 1.0,
-		0.0, 1.0,
-		0.0, 0.0,
-		0.0, 1.0,
-		0.0, 0.0,
-		1.0, 0.0,
-		1.0, 1.0,
-		1.0, 1.0,
-		0.0, 1.0,
-		0.0, 0.0,
-		1.0, 0.0,
-		1.0, 0.0,
-		1.0, 1.0,
-		0.0, 1.0,
-		0.0, 0.0,
-		0.0, 0.0,
-		1.0, 0.0,
-		1.0, 1.0,
-		0.0, 1.0
-	];
-	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoords), gl.STATIC_DRAW);
-	nodeVertexTextureCoordBuffer.itemSize = 2;
-	nodeVertexTextureCoordBuffer.numItems = 24;
-}
-*/
 
 // stole this from learningwebgl.com/lessons/lesson01/index.html
 function getShader(id) {
@@ -254,14 +186,29 @@ function initShaders() {
 	// use shader program
 	gl.useProgram(shaderProgram);
 
+	//
 	// store some shader hooks
+	//
+
 	// vertex positions !
 	shaderProgram.vertexPosAttrib = gl.getAttribLocation(shaderProgram, 'aVertexPos');
 	gl.enableVertexAttribArray(shaderProgram.vertexPosAttrib);
 
-	// vertex colors !
-	shaderProgram.vertexColorAttrib = gl.getAttribLocation(shaderProgram, 'aVertexColor');
-	gl.enableVertexAttribArray(shaderProgram.vertexColorAttrib);
+	/*
+		// vertex normals !
+		shaderProgram.vertexNormalAttrib = gl.getAttribLocation(shaderProgram, 'aVertexNormal');
+		gl.enableVertexAttribArray(shaderProgram.vertexNormalAttrib);
+	*/
+
+	/*
+		// vertex colors !
+		shaderProgram.vertexColorAttrib = gl.getAttribLocation(shaderProgram, 'aVertexColor');
+		gl.enableVertexAttribArray(shaderProgram.vertexColorAttrib);
+	*/
+
+	// texture mapping
+	shaderProgram.textureCoordAttrib = gl.getAttribLocation(shaderProgram, 'aTextureCoord');
+	gl.enableVertexAttribArray(shaderProgram.textureCoordAttrib);
 
 	// set perspective and modelview matrices
 	shaderProgram.pMatrixUniform = gl.getUniformLocation(shaderProgram, 'uPMatrix');
@@ -315,21 +262,47 @@ function drawScene() {
 				0
 			);
 
-			// shade 'em too
-			gl.bindBuffer(gl.ARRAY_BUFFER, nodes[i].vertexColorBuffer);
-			gl.vertexAttribPointer(
-				shaderProgram.vertexColorAttrib,
-				nodes[i].vertexColorBuffer.itemSize,
-				gl.FLOAT,
-				false,
-				0,
-				0
-			);
+			/*
+				// normals!
+				gl.bindBuffer(gl.ARRAY_BUFFER, nodes[i].vertexNormalBuffer);
+				gl.vertexAttribPointer(
+					shaderProgram.vertexNormalAttrib,
+					nodes[i].vertexNormalBuffer.itemSize,
+					gl.FLOAT,
+					false,
+					0,
+					0
+				);
+			*/
+
+			/*
+				// shade 'em too
+				gl.bindBuffer(gl.ARRAY_BUFFER, nodes[i].vertexColorBuffer);
+				gl.vertexAttribPointer(
+					shaderProgram.vertexColorAttrib,
+					nodes[i].vertexColorBuffer.itemSize,
+					gl.FLOAT,
+					false,
+					0,
+					0
+				);
+			*/
+
+				// textures!!
+				gl.bindBuffer(gl.ARRAY_BUFFER, nodes[i].vertexTextureCoordBuffer);
+				gl.vertexAttribPointer(
+					shaderProgram.textureCoordAttrib,
+					nodes[i].vertexTextureCoordBuffer.itemSize,
+					gl.FLOAT,
+					false,
+					0,
+					0
+				);
 
 			// texture
-			//gl.activeTexture(gl.TEXTURE0);
-			//gl.bindTexture(gl.TEXTURE_2D, nodeTexture);
-			//gl.uniform1i(shaderProgram.samplerUniform, 0);
+			gl.activeTexture(gl.TEXTURE0);
+			gl.bindTexture(gl.TEXTURE_2D, nodes[i].texture);
+			gl.uniform1i(gl.getUniformLocation(shaderProgram, 'uSampler'), 0);
 
 			// element array
 			gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, nodes[i].vertexIndexBuffer);
@@ -341,32 +314,13 @@ function drawScene() {
 	}
 }
 
-function handleLoadedTexture(texture) {
-	gl.bindTexture(gl.TEXTURE_2D, texture);
-	// investigate this call
-	gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, texture.image);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-	gl.bindTexture(gl.TEXTURE_2D, null); // cleanup
-}
-
-function initTextures() {
-	nodeTexture = gl.createTexture();
-	nodeTexture.image = new Image();
-	nodeTexture.image.onload = function() {
-		handleLoadedTexture(nodeTexture);
-	};
-	nodeTexture.image.src = "404-gray.png";
-}
-
 // latency cleverness from http://learningwebgl.com/blog/?p=239
 function animate() {
 	var timeNow = new Date().getTime();
 
 	if (lastTime !== 0) {
 		for (var i = nodes.length - 1; i >= 0; i--) {
-			dumpNode(i);
+			//dumpNode(i);
 			var elapsed = timeNow - lastTime;
 			nodes[i].rotX += (Math.PI/2 * elapsed / 1000.0); // this will overflow eventually
 			nodes[i].rotX %= Math.PI*2;
@@ -405,9 +359,7 @@ function startGL() {
 		);
 	}
 
-	// initBuffers();
 	initShaders();
-	// initTextures();
 	gl.clearColor(0.0, 0.0, 0.0, 1.0); // black
 	gl.enable(gl.DEPTH_TEST);
 	tick();
